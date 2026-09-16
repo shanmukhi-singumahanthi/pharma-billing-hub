@@ -126,3 +126,25 @@
 @media (max-width: 767px) {
   .content-grid { background-size: 25px 25px; }
 }
+
+@media print {
+  @page { margin: 12mm; }
+  body * { visibility: hidden !important; }
+  .receipt-print-sheet,
+  .receipt-print-sheet * { visibility: visible !important; }
+  .receipt-print-sheet {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+  .receipt-actions,
+  .receipt-close { display: none !important; }
+}
