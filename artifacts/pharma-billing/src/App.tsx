@@ -25,6 +25,7 @@ type Sale = { id: string; customer: string; items: string; lines: SaleLine[]; am
 const COMPANY_NAME = 'Vestas Pharmaceuticals';
 const COMPANY_PHONE = '+91 98765 43210';
 const COMPANY_ADDRESS = '14, Lake View Road, Pune 411001';
+const OWNER_NAME = 'Satyendranath S';
 
 const initialProducts: Product[] = [
   { id: 1, name: 'Dolo 650', generic: 'Paracetamol 650mg', category: 'Pain relief', unit: '15 tablets', price: 32, stock: 12, reorder: 20, accent: 'coral' },
@@ -78,7 +79,7 @@ function Sidebar({ active, onChange, mobileOpen, closeMobile }: { active: View; 
     </div>
     <div className="mt-auto space-y-3">
       <button type="button" data-testid="nav-settings" onClick={() => { onChange('settings'); closeMobile(); }} className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold transition-all ${active === 'settings' ? 'bg-white/12 text-white' : 'text-white/60 hover:bg-white/7 hover:text-white'}`}><span className="flex size-9 items-center justify-center rounded-xl bg-white/7"><Settings size={18} strokeWidth={1.8} /></span>Settings</button>
-       <div className="rounded-2xl border border-white/10 bg-white/7 p-3"><div className="flex items-center gap-2"><div className="flex size-8 items-center justify-center rounded-full bg-[#e9ae79] text-xs font-bold text-[#244d4b]">VP</div><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">Vestas team</p><p className="truncate text-[10px] text-white/45">Owner · {COMPANY_NAME}</p></div><ChevronDown size={14} className="text-white/40" /></div></div>
+       <div className="rounded-2xl border border-white/10 bg-white/7 p-3"><div className="flex items-center gap-2"><div className="flex size-8 items-center justify-center rounded-full bg-[#e9ae79] text-xs font-bold text-[#244d4b]">SS</div><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{OWNER_NAME}</p><p className="truncate text-[10px] text-white/45">Owner · {COMPANY_NAME}</p></div><ChevronDown size={14} className="text-white/40" /></div></div>
        <p className="px-2 text-[10px] leading-4 text-white/35">Vestas Billing · Your pharmacy counter, made simpler.</p>
     </div>
   </aside>;
@@ -89,7 +90,7 @@ function CrossMark() {
 }
 
 function Topbar({ active, onMenu, onNewBill, onNotify }: { active: View; onMenu: () => void; onNewBill: () => void; onNotify: () => void }) {
-  const title = active === 'overview' ? 'Good morning, Nisha' : active === 'billing' ? 'Create a new bill' : active === 'products' ? 'Products & stock' : active === 'sales' ? 'Sales history' : 'Business settings';
+  const title = active === 'overview' ? `Good morning, ${OWNER_NAME}` : active === 'billing' ? 'Create a new bill' : active === 'products' ? 'Products & stock' : active === 'sales' ? 'Sales history' : 'Business settings';
   const subtitle = active === 'overview' ? `Here is how ${COMPANY_NAME} is doing today.` : active === 'billing' ? 'Serve the next customer with confidence.' : active === 'products' ? 'Prices, quantities, and reorder signals in one place.' : active === 'sales' ? 'A clear record of every completed sale.' : 'Keep your pharmacy details up to date.';
   return <header className="mb-7 flex items-start justify-between gap-4"><div className="flex items-start gap-3"><IconButton label="open menu" onClick={onMenu} className="mt-0.5 size-10 border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] md:hidden"><Menu size={19} /></IconButton><div><div className="mb-1 flex items-center gap-2 text-xs font-semibold text-[hsl(var(--muted-foreground))]"><span>{today}</span><span className="size-1 rounded-full bg-[hsl(var(--secondary))]" /><span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-[#67a889]" /> Store open</span></div><h1 data-testid="text-page-title" className="font-display text-[clamp(24px,3vw,32px)] font-extrabold tracking-[-.04em] text-[hsl(var(--foreground))]">{title}</h1><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{subtitle}</p></div></div><div className="flex shrink-0 items-center gap-2"><IconButton label="notifications" onClick={onNotify} className="size-10 border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]"><Bell size={18} strokeWidth={1.8} /></IconButton><button type="button" data-testid="button-header-new-bill" onClick={onNewBill} className="hidden items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-2.5 text-sm font-bold text-[hsl(var(--primary-foreground))] shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:flex"><Plus size={17} /> New bill</button></div></header>;
 }
