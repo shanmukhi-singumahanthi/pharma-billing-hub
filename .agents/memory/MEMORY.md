@@ -1,0 +1,1 @@
+- [Concurrent seed initialization](concurrent-seeding.md) — initialize shared sample data under one idempotent promise because concurrent first reads can race.

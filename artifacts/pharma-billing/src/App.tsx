@@ -1,5 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import {
+  getListProductsQueryKey,
+  getListSalesQueryKey,
+  useCreateSale,
+  useListProducts,
+  useListSales,
+  useUpdateProduct,
+} from '@workspace/api-client-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -27,28 +35,32 @@ const COMPANY_PHONE = '+91 98765 43210';
 const COMPANY_ADDRESS = '14, Lake View Road, Pune 411001';
 const OWNER_NAME = 'Satyendranath S';
 
-const initialProducts: Product[] = [
-  { id: 1, name: 'Dolo 650', generic: 'Paracetamol 650mg', category: 'Pain relief', unit: '15 tablets', price: 32, stock: 12, reorder: 20, accent: 'coral' },
-  { id: 2, name: 'Azithral 500', generic: 'Azithromycin 500mg', category: 'Antibiotic', unit: '5 tablets', price: 118, stock: 42, reorder: 15, accent: 'teal' },
-  { id: 3, name: 'Cetirizine 10mg', generic: 'Cetirizine Hydrochloride', category: 'Allergy', unit: '10 tablets', price: 24, stock: 8, reorder: 18, accent: 'gold' },
-  { id: 4, name: 'Shelcal 500', generic: 'Calcium + Vitamin D3', category: 'Vitamins', unit: '15 tablets', price: 105, stock: 67, reorder: 20, accent: 'lilac' },
-  { id: 5, name: 'ORS Apple', generic: 'Oral Rehydration Salts', category: 'Wellness', unit: '200ml sachet', price: 22, stock: 31, reorder: 15, accent: 'sky' },
-  { id: 6, name: 'Volini Gel', generic: 'Diclofenac Pain Relief', category: 'Pain relief', unit: '30g tube', price: 92, stock: 6, reorder: 12, accent: 'coral' },
-  { id: 7, name: 'Pantocid 40', generic: 'Pantoprazole 40mg', category: 'Digestive', unit: '15 tablets', price: 146, stock: 26, reorder: 12, accent: 'teal' },
-  { id: 8, name: 'Becosules', generic: 'B-Complex Vitamins', category: 'Vitamins', unit: '20 capsules', price: 48, stock: 4, reorder: 15, accent: 'gold' },
-  { id: 9, name: 'Moov Spray', generic: 'Topical Analgesic', category: 'Pain relief', unit: '80g can', price: 165, stock: 19, reorder: 10, accent: 'lilac' },
-];
-
-const initialSales: Sale[] = [
-  { id: 'PF-240621-018', customer: 'Anita Sharma', items: 'Dolo 650, ORS Apple +1', lines: [{ name: 'Dolo 650', quantity: 2, unitPrice: 32, lineTotal: 64 }, { name: 'ORS Apple', quantity: 1, unitPrice: 22, lineTotal: 22 }, { name: 'Pantocid 40', quantity: 1, unitPrice: 146, lineTotal: 146 }], amount: 242, method: 'UPI', time: '11:48 AM', status: 'Paid' },
-  { id: 'PF-240621-017', customer: 'Walk-in customer', items: 'Shelcal 500', lines: [{ name: 'Shelcal 500', quantity: 1, unitPrice: 105, lineTotal: 105 }], amount: 105, method: 'Cash', time: '11:35 AM', status: 'Paid' },
-  { id: 'PF-240621-016', customer: 'Rajesh Kumar', items: 'Azithral 500, Pantocid 40', lines: [{ name: 'Azithral 500', quantity: 1, unitPrice: 118, lineTotal: 118 }, { name: 'Pantocid 40', quantity: 1, unitPrice: 146, lineTotal: 146 }], amount: 264, method: 'Card', time: '10:52 AM', status: 'Paid' },
-  { id: 'PF-240621-015', customer: 'Meera Joshi', items: 'Becosules, Cetirizine 10mg', lines: [{ name: 'Becosules', quantity: 2, unitPrice: 48, lineTotal: 96 }, { name: 'Cetirizine 10mg', quantity: 1, unitPrice: 24, lineTotal: 24 }], amount: 120, method: 'UPI', time: '10:19 AM', status: 'Paid' },
-  { id: 'PF-240621-014', customer: 'Walk-in customer', items: 'Volini Gel', lines: [{ name: 'Volini Gel', quantity: 1, unitPrice: 92, lineTotal: 92 }], amount: 92, method: 'Cash', time: '09:42 AM', status: 'Paid' },
-];
-
 const money = (value: number) => `₹${value.toLocaleString('en-IN')}`;
 const today = 'Tuesday, 21 June 2024';
+
+type ApiSale = {
+  id: number;
+  billNumber: string;
+  customer: string;
+  lines: Array<{ productId: number; name: string; quantity: number; unitPrice: number; lineTotal: number }>;
+  amount: number;
+  method: PaymentMethod;
+  status: 'Paid';
+  createdAt: string;
+};
+
+function mapSale(sale: ApiSale): Sale {
+  return {
+    id: sale.billNumber,
+    customer: sale.customer,
+    items: sale.lines.map((line) => `${line.name}${line.quantity > 1 ? ` ×${line.quantity}` : ''}`).join(', '),
+    lines: sale.lines.map(({ name, quantity, unitPrice, lineTotal }) => ({ name, quantity, unitPrice, lineTotal })),
+    amount: sale.amount,
+    method: sale.method,
+    time: new Date(sale.createdAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }),
+    status: sale.status,
+  };
+}
 
 const navItems: { id: View; label: string; icon: LucideIcon; hint: string }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard, hint: 'Your day at a glance' },
@@ -179,7 +191,7 @@ function SearchBox({ value, onChange, placeholder, testId }: { value: string; on
   return <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 shadow-soft focus-within:border-[hsl(var(--primary))] focus-within:ring-2 focus-within:ring-[hsl(var(--primary)/.12)]"><Search size={17} className="shrink-0 text-[hsl(var(--muted-foreground))]" /><input data-testid={testId} type="search" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]" /></label>;
 }
 
-function Billing({ products, cart, setCart, onComplete }: { products: Product[]; cart: CartItem[]; setCart: (cart: CartItem[]) => void; onComplete: (customer: string, payment: PaymentMethod) => void }) {
+function Billing({ products, cart, setCart, onComplete, submitting }: { products: Product[]; cart: CartItem[]; setCart: (cart: CartItem[]) => void; onComplete: (customer: string, payment: PaymentMethod) => void; submitting: boolean }) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');
   const [customer, setCustomer] = useState('');
@@ -191,17 +203,17 @@ function Billing({ products, cart, setCart, onComplete }: { products: Product[];
   const adjust = (id: number, amount: number) => setCart(cart.map((item) => item.product.id === id ? { ...item, quantity: item.quantity + amount } : item).filter((item) => item.quantity > 0));
   return <div className="page-in grid items-start gap-6 xl:grid-cols-[1.18fr_.82fr]">
     <section className="min-w-0"><div className="mb-4 flex items-center gap-2"><SearchBox value={query} onChange={setQuery} placeholder="Search by name or generic medicine..." testId="input-billing-search" /><IconButton label="filter products" onClick={() => setCategory('All')} className="size-11 shrink-0 border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))]"><SlidersHorizontal size={17} /></IconButton></div><div className="mb-5 flex gap-2 overflow-x-auto pb-1">{categories.map((item) => <button type="button" key={item} data-testid={`filter-category-${item.toLowerCase().replaceAll(' ', '-')}`} onClick={() => setCategory(item)} className={`whitespace-nowrap rounded-full px-3.5 py-2 text-xs font-bold transition-colors ${category === item ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]'}`}>{item}</button>)}</div><div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{visible.map((product) => <button type="button" key={product.id} data-testid={`card-billing-product-${product.id}`} disabled={product.stock === 0} onClick={() => addItem(product)} className="group rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] p-3 text-left shadow-soft transition-all hover:-translate-y-0.5 hover:border-[hsl(var(--primary)/.45)] hover:shadow-card disabled:cursor-not-allowed disabled:opacity-50"><div className="flex items-start justify-between"><ProductTile accent={product.accent} /><span className="rounded-full bg-[hsl(var(--accent))] px-2 py-1 text-[10px] font-bold text-[hsl(var(--primary))]">{product.stock} left</span></div><p className="mt-3 truncate text-sm font-bold">{product.name}</p><p className="mt-0.5 truncate text-[10px] text-[hsl(var(--muted-foreground))]">{product.generic}</p><div className="mt-3 flex items-center justify-between"><span className="font-display text-sm font-extrabold">{money(product.price)}</span><span className="flex size-7 items-center justify-center rounded-lg bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] opacity-80 transition-opacity group-hover:opacity-100"><Plus size={15} /></span></div></button>)}</div>{visible.length === 0 && <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--card)/.55)] px-6 py-12 text-center"><Package className="mx-auto text-[hsl(var(--muted-foreground))]" /><p className="mt-3 text-sm font-bold">No medicines found</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Try a different name or category.</p></div>}</section>
-    <section className="sticky top-5 rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] shadow-card"><div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-5"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Current bill</p><h2 className="mt-1 font-display text-xl font-extrabold">New sale <span className="ml-1 text-xs font-medium text-[hsl(var(--muted-foreground))]">#PF-240621-019</span></h2></div><IconButton label="clear bill" onClick={() => setCart([])} className="size-8 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]"><Trash2 size={16} /></IconButton></div><div className="max-h-[285px] overflow-y-auto p-5">{cart.length === 0 ? <div className="py-10 text-center"><div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-[hsl(var(--accent))] text-[hsl(var(--primary))]"><ShoppingCart size={24} /></div><p className="mt-3 text-sm font-bold">Your bill is ready</p><p className="mx-auto mt-1 max-w-[210px] text-xs leading-5 text-[hsl(var(--muted-foreground))]">Select medicines from the left to add them to this bill.</p></div> : <div className="space-y-4">{cart.map((item) => <div key={item.product.id} className="flex items-center gap-3" data-testid={`row-cart-${item.product.id}`}><ProductTile accent={item.product.accent} small /><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold">{item.product.name}</p><p className="mt-0.5 text-[11px] text-[hsl(var(--muted-foreground))]">{money(item.product.price)} each</p></div><div className="flex items-center gap-1 rounded-lg border border-[hsl(var(--border))] p-0.5"><IconButton label={`decrease ${item.product.name}`} onClick={() => adjust(item.product.id, -1)} className="size-6 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]"><Minus size={12} /></IconButton><span className="w-5 text-center text-xs font-bold">{item.quantity}</span><IconButton label={`increase ${item.product.name}`} onClick={() => adjust(item.product.id, 1)} className="size-6 text-[hsl(var(--primary))] hover:bg-[hsl(var(--accent))]"><Plus size={12} /></IconButton></div><span className="w-14 text-right text-xs font-extrabold">{money(item.product.price * item.quantity)}</span></div>)}</div>}</div><div className="border-t border-[hsl(var(--border))] p-5"><label className="mb-4 block"><span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">Customer <span className="font-normal normal-case tracking-normal">(optional)</span></span><div className="flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-3 py-2.5 focus-within:border-[hsl(var(--primary))]"><UserRound size={16} className="text-[hsl(var(--muted-foreground))]" /><input data-testid="input-customer" value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Walk-in customer" className="w-full bg-transparent text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]" /></div></label><div className="mb-5"><p className="mb-2 text-[11px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">Payment method</p><div className="grid grid-cols-3 gap-2">{(['Cash', 'UPI', 'Card'] as PaymentMethod[]).map((method) => <button type="button" key={method} data-testid={`button-payment-${method.toLowerCase()}`} onClick={() => setPayment(method)} className={`flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-xs font-bold transition-colors ${payment === method ? 'border-[hsl(var(--primary))] bg-[hsl(var(--accent))] text-[hsl(var(--primary))]' : 'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`}>{method === 'Cash' ? <Banknote size={15} /> : method === 'UPI' ? <WalletCards size={15} /> : <CreditCard size={15} />}{method}</button>)}</div></div><div className="mb-4 flex items-end justify-between"><span className="text-sm font-semibold text-[hsl(var(--muted-foreground))]">Total amount</span><span data-testid="text-bill-total" className="font-display text-2xl font-extrabold tracking-[-.04em]">{money(total)}</span></div><button type="button" data-testid="button-complete-sale" disabled={cart.length === 0} onClick={() => onComplete(customer || 'Walk-in customer', payment)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-40"><CircleCheck size={18} /> Complete sale</button></div></section>
+     <section className="sticky top-5 rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] shadow-card"><div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-5"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Current bill</p><h2 className="mt-1 font-display text-xl font-extrabold">New sale <span className="ml-1 text-xs font-medium text-[hsl(var(--muted-foreground))]">Saved when completed</span></h2></div><IconButton label="clear bill" onClick={() => setCart([])} className="size-8 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]"><Trash2 size={16} /></IconButton></div><div className="max-h-[285px] overflow-y-auto p-5">{cart.length === 0 ? <div className="py-10 text-center"><div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-[hsl(var(--accent))] text-[hsl(var(--primary))]"><ShoppingCart size={24} /></div><p className="mt-3 text-sm font-bold">Your bill is ready</p><p className="mx-auto mt-1 max-w-[210px] text-xs leading-5 text-[hsl(var(--muted-foreground))]">Select medicines from the left to add them to this bill.</p></div> : <div className="space-y-4">{cart.map((item) => <div key={item.product.id} className="flex items-center gap-3" data-testid={`row-cart-${item.product.id}`}><ProductTile accent={item.product.accent} small /><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold">{item.product.name}</p><p className="mt-0.5 text-[11px] text-[hsl(var(--muted-foreground))]">{money(item.product.price)} each</p></div><div className="flex items-center gap-1 rounded-lg border border-[hsl(var(--border))] p-0.5"><IconButton label={`decrease ${item.product.name}`} onClick={() => adjust(item.product.id, -1)} className="size-6 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]"><Minus size={12} /></IconButton><span className="w-5 text-center text-xs font-bold">{item.quantity}</span><IconButton label={`increase ${item.product.name}`} onClick={() => adjust(item.product.id, 1)} className="size-6 text-[hsl(var(--primary))] hover:bg-[hsl(var(--accent))]"><Plus size={12} /></IconButton></div><span className="w-14 text-right text-xs font-extrabold">{money(item.product.price * item.quantity)}</span></div>)}</div>}</div><div className="border-t border-[hsl(var(--border))] p-5"><label className="mb-4 block"><span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">Customer <span className="font-normal normal-case tracking-normal">(optional)</span></span><div className="flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-3 py-2.5 focus-within:border-[hsl(var(--primary))]"><UserRound size={16} className="text-[hsl(var(--muted-foreground))]" /><input data-testid="input-customer" value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Walk-in customer" className="w-full bg-transparent text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]" /></div></label><div className="mb-5"><p className="mb-2 text-[11px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">Payment method</p><div className="grid grid-cols-3 gap-2">{(['Cash', 'UPI', 'Card'] as PaymentMethod[]).map((method) => <button type="button" key={method} data-testid={`button-payment-${method.toLowerCase()}`} onClick={() => setPayment(method)} className={`flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-xs font-bold transition-colors ${payment === method ? 'border-[hsl(var(--primary))] bg-[hsl(var(--accent))] text-[hsl(var(--primary))]' : 'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`}>{method === 'Cash' ? <Banknote size={15} /> : method === 'UPI' ? <WalletCards size={15} /> : <CreditCard size={15} />}{method}</button>)}</div></div><div className="mb-4 flex items-end justify-between"><span className="text-sm font-semibold text-[hsl(var(--muted-foreground))]">Total amount</span><span data-testid="text-bill-total" className="font-display text-2xl font-extrabold tracking-[-.04em]">{money(total)}</span></div><button type="button" data-testid="button-complete-sale" disabled={cart.length === 0 || submitting} onClick={() => onComplete(customer || 'Walk-in customer', payment)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-40"><CircleCheck size={18} /> {submitting ? 'Saving bill…' : 'Complete sale'}</button></div></section>
   </div>;
 }
 
-function Products({ products, setProducts }: { products: Product[]; setProducts: (products: Product[]) => void }) {
+function Products({ products, onUpdate }: { products: Product[]; onUpdate: (id: number, update: { price: number; stock: number }) => void }) {
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState({ price: '', stock: '' });
   const filtered = products.filter((p) => `${p.name} ${p.generic} ${p.category}`.toLowerCase().includes(query.toLowerCase()));
   const startEdit = (product: Product) => { setEditing(product.id); setDraft({ price: String(product.price), stock: String(product.stock) }); };
-  const save = (id: number) => { setProducts(products.map((p) => p.id === id ? { ...p, price: Math.max(0, Number(draft.price) || 0), stock: Math.max(0, Number(draft.stock) || 0) } : p)); setEditing(null); };
+  const save = (id: number) => { onUpdate(id, { price: Math.max(0, Number(draft.price) || 0), stock: Math.max(0, Number(draft.stock) || 0) }); setEditing(null); };
   return <div className="page-in space-y-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><SearchBox value={query} onChange={setQuery} placeholder="Search products, generic names..." testId="input-products-search" /><div className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]"><span className="flex size-2 rounded-full bg-[#e6a15e]" /> {products.filter((p) => p.stock <= p.reorder).length} products need restocking</div></div><div className="overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] shadow-soft"><div className="hidden grid-cols-[1.7fr_1fr_.7fr_.7fr_110px] gap-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/.42)] px-5 py-3 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))] sm:grid"><span>Product</span><span>Category</span><span>Price</span><span>In stock</span><span /></div><div className="divide-y divide-[hsl(var(--border))]">{filtered.map((product) => { const low = product.stock <= product.reorder; const isEditing = editing === product.id; return <div key={product.id} data-testid={`row-product-${product.id}`} className={`grid gap-3 px-4 py-4 transition-colors hover:bg-[hsl(var(--muted)/.25)] sm:grid-cols-[1.7fr_1fr_.7fr_.7fr_110px] sm:items-center sm:gap-4 sm:px-5 ${low ? 'bg-[#fffaf1]' : ''}`}><div className="flex min-w-0 items-center gap-3"><ProductTile accent={product.accent} small /><div className="min-w-0"><p className="truncate text-sm font-bold">{product.name}</p><p className="truncate text-[11px] text-[hsl(var(--muted-foreground))]">{product.generic} · {product.unit}</p></div></div><div className="hidden text-xs text-[hsl(var(--muted-foreground))] sm:block">{product.category}</div>{isEditing ? <input data-testid={`input-price-${product.id}`} type="number" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value })} className="w-full rounded-lg border border-[hsl(var(--primary))] bg-transparent px-2 py-1.5 text-sm font-bold outline-none" /> : <span className="text-sm font-extrabold">{money(product.price)}</span>}{isEditing ? <input data-testid={`input-stock-${product.id}`} type="number" value={draft.stock} onChange={(e) => setDraft({ ...draft, stock: e.target.value })} className="w-full rounded-lg border border-[hsl(var(--primary))] bg-transparent px-2 py-1.5 text-sm font-bold outline-none" /> : <span className={`flex items-center gap-1 text-sm font-bold ${low ? 'text-[#c66d45]' : ''}`}><span className={`size-1.5 rounded-full ${low ? 'bg-[#dc895c]' : 'bg-[#66a989]'}`} />{product.stock} <span className="text-[10px] font-normal text-[hsl(var(--muted-foreground))]">units</span></span>}<div className="flex justify-end gap-1 sm:justify-start">{isEditing ? <><button type="button" data-testid={`button-save-product-${product.id}`} onClick={() => save(product.id)} className="rounded-lg bg-[hsl(var(--primary))] px-2.5 py-1.5 text-[10px] font-bold text-[hsl(var(--primary-foreground))]">Save</button><button type="button" data-testid={`button-cancel-product-${product.id}`} onClick={() => setEditing(null)} className="rounded-lg px-2 py-1.5 text-[10px] font-bold text-[hsl(var(--muted-foreground))]">Cancel</button></> : <button type="button" data-testid={`button-edit-product-${product.id}`} onClick={() => startEdit(product)} className="flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] px-2.5 py-1.5 text-[10px] font-bold text-[hsl(var(--muted-foreground))] transition-colors hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]"><Edit3 size={13} /> Edit</button>}</div></div> })}</div>{filtered.length === 0 && <div className="px-6 py-14 text-center"><Package className="mx-auto text-[hsl(var(--muted-foreground))]" /><p className="mt-3 text-sm font-bold">No products match that search</p></div>}</div><p className="text-xs text-[hsl(var(--muted-foreground))]">Tip: Review low-stock items before the evening rush. Changes save instantly on this device.</p></div>;
 }
 
@@ -227,20 +239,49 @@ function SettingField({ label, value, onChange, id }: { label: string; value: st
 function AppShell() {
   const [active, setActive] = useState<View>('overview');
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [sales, setSales] = useState<Sale[]>(initialSales);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [notice, setNotice] = useState('');
   const [receiptSale, setReceiptSale] = useState<Sale | null>(null);
+  const queryClient = useQueryClient();
+  const productsQuery = useListProducts();
+  const salesQuery = useListSales();
+  const createSaleMutation = useCreateSale();
+  const updateProductMutation = useUpdateProduct();
+  const products = (productsQuery.data ?? []) as Product[];
+  const sales = (salesQuery.data ?? []).map((sale) => mapSale(sale as ApiSale));
   const go = (view: View) => { setActive(view); setMobileOpen(false); };
-  const completeSale = (customer: string, payment: PaymentMethod) => {
-    const total = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-    const completedSale: Sale = { id: `VP-240621-${String(sales.length + 15).padStart(3, '0')}`, customer, items: cart.map((item) => `${item.product.name}${item.quantity > 1 ? ` ×${item.quantity}` : ''}`).join(', '), lines: cart.map((item) => ({ name: item.product.name, quantity: item.quantity, unitPrice: item.product.price, lineTotal: item.product.price * item.quantity })), amount: total, method: payment, time: 'Just now', status: 'Paid' };
-    setProducts(products.map((product) => { const item = cart.find((entry) => entry.product.id === product.id); return item ? { ...product, stock: Math.max(0, product.stock - item.quantity) } : product; }));
-    setSales([completedSale, ...sales]);
-    setCart([]); setNotice(`Sale completed · ${money(total)} collected via ${payment}`); setActive('sales'); setReceiptSale(completedSale); window.setTimeout(() => setNotice(''), 4500);
+  const updateProduct = (id: number, update: { price: number; stock: number }) => {
+    updateProductMutation.mutate({ id, data: update }, {
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+        setNotice('Product price and stock saved');
+        window.setTimeout(() => setNotice(''), 3000);
+      },
+      onError: () => setNotice('Could not save this product. Please try again.'),
+    });
   };
-  const page = useMemo(() => active === 'overview' ? <Overview products={products} sales={sales} onNavigate={go} /> : active === 'billing' ? <Billing products={products} cart={cart} setCart={setCart} onComplete={completeSale} /> : active === 'products' ? <Products products={products} setProducts={setProducts} /> : active === 'sales' ? <Sales sales={sales} onOpenReceipt={setReceiptSale} /> : <SettingsView />, [active, products, sales, cart]);
+  const completeSale = (customer: string, payment: PaymentMethod) => {
+    createSaleMutation.mutate({
+      data: {
+        customer,
+        method: payment,
+        lines: cart.map((item) => ({ productId: item.product.id, quantity: item.quantity })),
+      },
+    }, {
+      onSuccess: (savedSale) => {
+        const completedSale = mapSale(savedSale as ApiSale);
+        void queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+        void queryClient.invalidateQueries({ queryKey: getListSalesQueryKey() });
+        setCart([]);
+        setNotice(`Sale completed · ${money(completedSale.amount)} collected via ${payment}`);
+        setActive('sales');
+        setReceiptSale(completedSale);
+        window.setTimeout(() => setNotice(''), 4500);
+      },
+      onError: (error) => setNotice(error instanceof Error ? error.message : 'Could not save this bill. Please try again.'),
+    });
+  };
+  const page = useMemo(() => active === 'overview' ? <Overview products={products} sales={sales} onNavigate={go} /> : active === 'billing' ? <Billing products={products} cart={cart} setCart={setCart} onComplete={completeSale} submitting={createSaleMutation.isPending} /> : active === 'products' ? <Products products={products} onUpdate={updateProduct} /> : active === 'sales' ? <Sales sales={sales} onOpenReceipt={setReceiptSale} /> : <SettingsView />, [active, products, sales, cart, createSaleMutation.isPending]);
   return <div className="app-shell flex"><Sidebar active={active} onChange={go} mobileOpen={mobileOpen} closeMobile={() => setMobileOpen(false)} />{mobileOpen && <button type="button" aria-label="close navigation overlay" data-testid="button-close-navigation" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-30 bg-[#173c3b]/40 md:hidden" />}<main className="content-grid min-w-0 flex-1 overflow-hidden"><div className="mx-auto max-w-[1500px] px-4 py-5 sm:px-7 sm:py-7 lg:px-10"><Topbar active={active} onMenu={() => setMobileOpen(true)} onNewBill={() => go('billing')} onNotify={() => { setNotice('All caught up — no new alerts'); window.setTimeout(() => setNotice(''), 2500); }} />{notice && <div data-testid="status-sale-complete" className="mb-5 flex items-center gap-3 rounded-xl border border-[#a6d2bd] bg-[#edf8f1] px-4 py-3 text-sm font-semibold text-[#317456] shadow-soft page-in"><CircleCheck size={18} />{notice}<button type="button" data-testid="button-dismiss-notice" onClick={() => setNotice('')} className="ml-auto rounded-lg p-1 hover:bg-[#d8eee1]"><X size={15} /></button></div>}{page}</div></main>{receiptSale && <ReceiptModal sale={receiptSale} onClose={() => setReceiptSale(null)} />}</div>;
 }
 

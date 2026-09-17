@@ -10,6 +10,10 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: products
+    description: Pharmacy product and stock operations
+  - name: sales
+    description: Completed pharmacy bills
 paths:
   /healthz:
     get:
@@ -24,7 +28,119 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List pharmacy products
+      responses:
+        "200":
+          description: Pharmacy products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+  /products/{id}:
+    patch:
+      operationId: updateProduct
+      tags: [products]
+      summary: Update a product price or stock count
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductUpdate"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /sales:
+    get:
+      operationId: listSales
+      tags: [sales]
+      summary: List completed bills
+      responses:
+        "200":
+          description: Completed bills
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Sale"
+    post:
+      operationId: createSale
+      tags: [sales]
+      summary: Create a bill and reduce stock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaleInput"
+      responses:
+        "201":
+          description: Completed bill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "400":
+          description: Invalid sale or insufficient stock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /sales/{id}:
+    get:
+      operationId: getSale
+      tags: [sales]
+      summary: Get a completed bill
+      parameters:
+        - $ref: "#/components/parameters/SaleId"
+      responses:
+        "200":
+          description: Completed bill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "404":
+          description: Sale not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
+  parameters:
+    ProductId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    SaleId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +149,110 @@ components:
           type: string
       required:
         - status
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        generic:
+          type: string
+        category:
+          type: string
+        unit:
+          type: string
+        price:
+          type: number
+        stock:
+          type: integer
+        reorder:
+          type: integer
+        accent:
+          type: string
+      required: [id, name, generic, category, unit, price, stock, reorder, accent]
+    ProductUpdate:
+      type: object
+      properties:
+        price:
+          type: number
+          minimum: 0
+        stock:
+          type: integer
+          minimum: 0
+        reorder:
+          type: integer
+          minimum: 0
+      minProperties: 1
+    SaleLineInput:
+      type: object
+      properties:
+        productId:
+          type: integer
+          minimum: 1
+        quantity:
+          type: integer
+          minimum: 1
+      required: [productId, quantity]
+    SaleInput:
+      type: object
+      properties:
+        customer:
+          type: string
+          minLength: 1
+        method:
+          type: string
+          enum: [Cash, UPI, Card]
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/SaleLineInput"
+      required: [customer, method, lines]
+    SaleLine:
+      type: object
+      properties:
+        productId:
+          type: integer
+        name:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        lineTotal:
+          type: number
+      required: [productId, name, quantity, unitPrice, lineTotal]
+    Sale:
+      type: object
+      properties:
+        id:
+          type: integer
+        billNumber:
+          type: string
+        customer:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/SaleLine"
+        amount:
+          type: number
+        method:
+          type: string
+          enum: [Cash, UPI, Card]
+        status:
+          type: string
+          enum: [Paid]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, billNumber, customer, lines, amount, method, status, createdAt]
 
